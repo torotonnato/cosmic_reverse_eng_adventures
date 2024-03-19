@@ -2,6 +2,7 @@ import os
 import struct
 
 class Entry:
+    
     record_size = 20
 
     def __init__(self, fname, ofs, size, data):
@@ -32,6 +33,7 @@ class Entry:
             f.write(self.data[self.ofs:self.ofs + self.size])
 
 class Volume:
+
     def __init__(self, fname, data):
         self.fname = os.path.basename(fname)
         self.data = data
