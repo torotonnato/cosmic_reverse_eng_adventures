@@ -12,7 +12,7 @@ $(BUILD_PATH)/cosmo.com: $(SOURCE_PATH)cosmo.asm $(SOURCE_PATH)speaker_drv.asm
 	@echo ✅ assembled: \\e[4m$(SIZE) bytes\\e[0m
 
 gen_pal:
-	@python $(SCRIPTS_PATH)gen_pal.py $(RES_PATH)palette.css
+	@python $(SCRIPTS_PATH)gen_pal.py $(RES_PATH)palette.css 1
 
 .PHONY: run clean
 

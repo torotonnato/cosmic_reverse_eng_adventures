@@ -23,7 +23,7 @@ def pretty_hex(n):
 	"""
     return f"0x{hex(n)[2:].rjust(2, '0')}"
 
-CSS_REGEXP = r'([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})'
+CSS_RE = re.compile(r'([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})')
 
 def gen_palette_from(css, start_idx):
     """
@@ -35,9 +35,9 @@ def gen_palette_from(css, start_idx):
         return []
     asm_db = []
     while l := css.readline():
-        if m := re.search(CSS_REGEXP, l):
+        if m := CSS_RE.search(l):
             if idx >= len(ega_mapping):
-                print('Warning: CSS file contains too many colors. Skipping')
+                print('; Warning: CSS file contains too many colors. Skipping some')
                 break
             r, g, b = [pretty_hex(int(chan, 16) >> 2) for chan in m.groups()]
             asm_db.append(f'\tdb {pretty_hex(ega_mapping[idx])}, {r}, {g}, {b}')
@@ -45,10 +45,11 @@ def gen_palette_from(css, start_idx):
     return asm_db
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('Usage: gen_pal.py <css_file>')
+    if len(sys.argv) not in [2, 3]:
+        print('Usage: gen_pal.py <css_file> start_idx (default= 0)')
         sys.exit(1)
 
+    start_idx = int(sys.argv[2]) if len(sys.argv) == 3 else 0
     with open(sys.argv[1], encoding="utf-8") as f:
         print('palette:')
-        print('\n'.join(gen_palette_from(f, 1)))
+        print('\n'.join(gen_palette_from(f, start_idx)))
