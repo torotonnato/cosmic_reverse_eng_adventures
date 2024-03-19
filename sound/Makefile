@@ -5,9 +5,9 @@ RES_PATH=res/
 DOSBOX_HOME=/home/$$(whoami)/dos
 SIZE=`ls build/cosmo.com -l | cut -d' ' -f5`
 
-all: $(BUILD_PATH)cosmo.com
+all: $(BUILD_PATH)/cosmo.com
 
-build/cosmo.com: $(SOURCE_PATH)cosmo.asm $(SOURCE_PATH)speaker_drv.asm
+$(BUILD_PATH)/cosmo.com: $(SOURCE_PATH)cosmo.asm $(SOURCE_PATH)speaker_drv.asm
 	@nasm $(SOURCE_PATH)cosmo.asm -o $(BUILD_PATH)cosmo.com -I$(SOURCE_PATH)
 	@echo ✅ assembled: \\e[4m$(SIZE) bytes\\e[0m
 
