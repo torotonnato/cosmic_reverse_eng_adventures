@@ -2,19 +2,21 @@ import os
 from entry import Entry
 
 class Volume:
-    def __init__(self, fname):
-        self.entries = []
+    def __init__(self, fname, data):
         self.fname = os.path.basename(fname)
-        self.load(fname)
+        self.data = data
+        self.entries = []
 
-    def load(self, fname):
+    @staticmethod
+    def open(fname):
         with open(fname, 'rb') as f:
-            self.data = f.read()
-            for idx in range(0, len(self.data), Entry.record_size):
-                entry = Entry.from_bytes(self.data[idx:idx + Entry.record_size])
-                self.entries.append(entry)
-                if entry.ofs + entry.size >= len(self.data):
+            vol = Volume(fname, f.read())
+            for idx in range(0, len(vol.data), Entry.record_size):
+                entry = Entry.from_bytes(vol.data[idx:idx + Entry.record_size])
+                vol.entries.append(entry)
+                if entry.ofs + entry.size >= len(vol.data):
                     break
+            return vol
 
     def print(self):
         for entry in self.entries:
@@ -25,8 +27,11 @@ class Volume:
         for entry in self.entries:
             print(entry.as_csv())
 
-    def extract(self, path_prefix):
+    def unpack(self, path_prefix):
         path = os.path.join(path_prefix, self.fname)
-        os.makedirs(path)
+        try:
+            os.makedirs(path)
+        except OSError:
+            pass
         for entry in self.entries:
-            entry.extract(path, self.data)
+            entry.unpack(path)
