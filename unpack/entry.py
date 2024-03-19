@@ -14,7 +14,7 @@ class Entry:
             data[:11].strip(b'\x00').lower().decode(),
             struct.unpack('<i', data[12:16])[0],
             struct.unpack('<i', data[16:20])[0]
-		)
+        )
 
     def print(self):
         print(f'\tfname: {self.fname}')
