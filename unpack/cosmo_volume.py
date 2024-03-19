@@ -2,7 +2,7 @@ import os
 import struct
 
 class Entry:
-    
+
     record_size = 20
 
     def __init__(self, fname, ofs, size, data):
@@ -31,6 +31,8 @@ class Entry:
     def unpack(self, path):
         with open(f'{path}/{self.fname}', 'wb') as f:
             f.write(self.data[self.ofs:self.ofs + self.size])
+
+
 
 class Volume:
 
