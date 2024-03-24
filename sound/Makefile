@@ -2,7 +2,6 @@ SOURCE_PATH=src/
 BUILD_PATH=build/
 SCRIPTS_PATH=scripts/
 RES_PATH=res/
-DOSBOX_HOME=/home/$$(whoami)/dos
 SIZE=`ls build/cosmo.com -l | cut -d' ' -f5`
 
 all: $(BUILD_PATH)/cosmo.com
@@ -17,8 +16,7 @@ gen_pal:
 .PHONY: run clean
 
 run: $(BUILD_PATH)cosmo.com
-	@cp $(BUILD_PATH)cosmo.com $(DOSBOX_HOME)
-	@dosbox -c cosmo.com -c exit 1> /dev/null
+	@dosbox -conf dosbox.conf -c cosmo.com -c exit 1> /dev/null
 
 clean:
 	@rm -f $(BUILD_PATH)cosmo.com
