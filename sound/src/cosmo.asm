@@ -63,6 +63,38 @@ main:
     fld1                                          ;<1.0> <bins_alpha> <bins_max_height> <f_max> <pit_src_clock_hz * bins_mult_log> <bins_mult>
     fsub st0, st1                                 ;<1.0 - bins_alpha> <bins_alpha> <bins_max_height> <f_max> <pit_src_clock_hz * bins_mult_log> <bins_mult>
 
+.z:
+    mov ah, 1
+    int 16h
+    jnz .no_key_pressed
+    mov ah, 0
+    int 16h
+    cmp ax, 0x011b
+    je .quit
+    cmp ax, 0x3920
+    jne .no_space
+    mov si, sound2
+	call speaker_drv_play
+    jmp .end_of_switch
+.no_space:
+    cmp ax, 0x4b00
+    jne .no_left
+    mov al, 1
+    jmp .end_of_switch
+.no_left:
+    cmp ax, 0x4d00
+    jne .end_of_switch
+    mov al, 2
+.end_of_switch:
+    mov cx, 80 * 25
+    sub di, di
+    shl ax, 12
+    repz stosw
+.no_key_pressed:
+    jmp .z
+.quit:
+    int 0x20
+
 .l:
     setup_widget
     tui_widget (title_str + 9), (ibins)
