@@ -43,7 +43,7 @@ def gen_palette_from(css, start_idx):
             asm_db.append(f'\tdb {pretty_hex(ega_mapping[idx])}, {r}, {b}, {g}')
             idx += 1
     asm_db.append('')
-    asm_db.append(f'palette_last_color: equ {pretty_hex(ega_mapping[idx - 1])}')
+    asm_db.append(f'tui_palette_last_ega_color: equ {pretty_hex(ega_mapping[idx - 1])}')
     return asm_db
 
 if __name__ == '__main__':
@@ -53,5 +53,5 @@ if __name__ == '__main__':
 
     start_idx = int(sys.argv[2]) if len(sys.argv) == 3 else 0
     with open(sys.argv[1], encoding="utf-8") as f:
-        print('palette:')
+        print('tui_palette:')
         print('\n'.join(gen_palette_from(f, start_idx)))
