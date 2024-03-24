@@ -4,7 +4,7 @@ A simple module that generates an EGA palette from an external CSS.
 Output format:
 
 palette:
-	db <index>, <r>, <g>, <b> ;with index, r, g, b in [0, 64)
+	db <index>, <r>, <b>, <g> ;with index, r, b, g in [0, 64)
 """
 
 import sys
@@ -40,8 +40,10 @@ def gen_palette_from(css, start_idx):
                 print('; Warning: CSS file contains too many colors. Skipping some')
                 break
             r, g, b = [pretty_hex(int(chan, 16) >> 2) for chan in m.groups()]
-            asm_db.append(f'\tdb {pretty_hex(ega_mapping[idx])}, {r}, {g}, {b}')
+            asm_db.append(f'\tdb {pretty_hex(ega_mapping[idx])}, {r}, {b}, {g}')
             idx += 1
+    asm_db.append('')
+    asm_db.append(f'palette_last_color: equ {pretty_hex(ega_mapping[idx - 1])}')
     return asm_db
 
 if __name__ == '__main__':
