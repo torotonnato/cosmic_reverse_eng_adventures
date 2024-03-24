@@ -76,5 +76,4 @@ class SoundArchive:
             data = f.read()
             if data[:4] != SoundArchive.MAGIC_BYTES:
                 raise NotRecognized
-            entries = [entry for entry in EntriesIterator(data)]
-            return SoundArchive(fname, entries)
+            return SoundArchive(fname, EntriesIterator(data))
