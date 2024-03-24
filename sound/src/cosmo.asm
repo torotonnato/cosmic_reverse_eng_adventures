@@ -6,6 +6,46 @@ jmp main
 
 bins_no: equ 20
 
+%macro setup_widget 0
+    mov ax, bins_no
+    call speaker_drv_get_current_note
+    jz .idx_done
+    push ax
+    mov bp, sp
+    fld st4                                 ;(pit_src_clock_hz * bins_mult_log) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fild word [bp]                          ;(lambda) (pit_src_clock_hz * bins_mult_log) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fmul st0, st5                           ;(f_max * lambda) (pit_src_clock_hz * bins_mult_log) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fdivp st1, st0                          ;(pit_src_clock_hz * bin_mult_log / f_max * lambda) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fld st6                                 ;(bins_mult) (pit_src_clock_hz * bin_mult_log / f_max * lambda) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fxch                                    ;(pit_src_clock_hz * bin_mult_log / f_max * lambda) (bins_mult) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fyl2xp1                                 ;(log) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fistp word [bp]                         ;(1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    pop ax
+    cmp ax, bins_no
+    jb .idx_done
+    mov al, bins_no - 1
+.idx_done:
+    sub ax, bins_no
+    not ax                                  ;(bins_no - 1) - ax
+    mov si, bins
+    mov di, ibins
+    mov cx, bins_no
+.update:
+    fld dword [si]                          ;(bins[i]) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fmul st1                                ;(bins[i] * (1.0 - bins_alpha)) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    cmp ax, cx
+    jne .not_selected
+    fadd st2                                ;(alpha + bins[i] * (1.0 - bins_alpha)) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+.not_selected:
+    fst dword [si]                          ;(alpha + bins[i] * (1.0 - bins_alpha)) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fmul st3                                ;((bins_max_height * (alpha + bins[i] * (1.0 - bins_alpha)))) (1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fistp word [di]                         ;(1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    add si, 4
+    inc di
+    inc di
+    loop .update
+%endmacro
+
 main:
 	tui_init
 	call speaker_drv_init
@@ -13,12 +53,18 @@ main:
 	mov si, sound2
 	call speaker_drv_play
 
-    fild word [bins_max_height] ;(bins_max_height)
-    fld dword [bins_alpha] ;(alpha) (bins_max_height)
-    fld1 ;(1.0) (alpha) (bins_max_height)
-    fsub st0, st1 ;(1.0 - alpha) (alpha) (bins_max_height)
+    fld dword [bins_mult]                         ;(bins_mult)
+    fld dword [bins_mult_log]                     ;(bins_mul_log) (bins_mult)
+    fld dword [pit_src_clock_hz]                  ;(pit_src_clock_hz) (bins_mult_log) (bins_mult)
+    fmulp                                         ;(pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fild word [bins_f_max]                        ;(f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fild word [bins_max_height]                   ;(bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fld dword [bins_alpha]                        ;(bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fld1                                          ;(1.0) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+    fsub st0, st1                                 ;(1.0 - bins_alpha) (bins_alpha) (bins_max_height) (f_max) (pit_src_clock_hz * bins_mult_log) (bins_mult)
+
 .l:
-    call setup_widget
+    setup_widget
     tui_widget (title_str + 9), (ibins)
     in al, 0x60
     cmp al, 1
@@ -29,57 +75,14 @@ main:
 
 	ret
 
-setup_widget:
-    mov ax, bins_no
-    call speaker_drv_get_current_note
-    jz .idx_done
-    push ax
-    mov bp, sp
-    fld dword [bins_mult] ;(bin_mult)
-    fld dword [bins_mult_log] ;(bin_mul_log) (bin_mult)
-    fld dword [pit_src_clock_hz] ;(pit_src_clock_hz) (bin_mult_log) (bin_mult)
-    fmulp ;(pit_src_clock_hz * bin_mult_log) (bin_mult)
-    fild word [bp] ;(lambda) (pit_src_clock_hz * bin_mult_log) (bin_mult)
-    fild word [bins_f_max] ;(f_max) (lambda) (pit_src_clock_hz * bin_mult_log) (bin_mult)
-    fmulp ;(f_max * lambda) (pit_src_clock_hz * bin_mult_log) (bin_mult)
-    fdivp ;(pit_src_clock_hz * bin_mult_log / f_max * lambda) (bin_mult)
-    fyl2xp1
-    fistp word [bp]
-    pop ax
-    cmp ax, bins_no
-    jb .idx_done
-    mov ax, bins_no - 1
-.idx_done:
-    sub ax, bins_no
-    inc ax
-    neg ax
-    mov si, bins
-    mov di, ibins
-    mov cx, bins_no
-.update:
-    fld dword [si] ;(bins[i]) (1.0 - alpha) (alpha) (bins_max_height)
-    fmul st1 ;(bins[i] * (1.0 - alpha)) (1.0 - alpha) (alpha) (bins_max_height)
-    cmp ax, cx
-    jne .not_selected
-    fadd st2 ;(alpha + bins[i] * (1.0 - alpha)) (1.0 - alpha) (alpha) (bins_max_height)
-.not_selected:
-    fst dword [si]
-    fmul st3
-    fistp word [di]
-    add si, 4
-    add di, 2
-    loop .update
-    ret
-
-
 pit_src_clock_hz: dd 1193181.6666
 
-bins_max_height: dw 16
-bins_alpha: dd 0.2
-bins: times bins_no dd 0.0
-bins_mult: dd 4.0
-bins_mult_log: dd 31.0
-bins_f_max: dw 10000
+bins_max_height:  dw 16
+bins_alpha:       dd 0.2
+bins:             times bins_no dd 0.0
+bins_mult:        dd 4.0
+bins_mult_log:    dd 31.0
+bins_f_max:       dw 10000
 
 ibins: times bins_no dw 0
 
