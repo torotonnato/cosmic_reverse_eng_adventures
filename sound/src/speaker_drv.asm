@@ -37,17 +37,6 @@ PPI_REG_B_PORT      equ 0x61
 	out PIT_CH0_DATA_PORT, al
 %endmacro
 
-%macro pit_ch0_trig_after 1
-	mov al, 0x30
-	out PIT_MODE_PORT, al
-	mov al, (%1) & 0xFF
-	out PIT_CH0_DATA_PORT, al
-	%if ((%1) & 0xFF) != ((%1) >> 8)
-		mov al, (%1) >> 8
-	%endif
-	out PIT_CH0_DATA_PORT, al
-%endmacro
-
 speaker_drv_init:
 	push es
 	push ds
@@ -91,7 +80,7 @@ speaker_drv_stop:
 	sti
 	ret
 
-speaker_drv_close:
+speaker_drv_shutdown:
 	push ds
 	push dx
 	push ax
@@ -111,6 +100,17 @@ speaker_drv_close:
 	pop ds
 	ret
 
+speaker_drv_get_current_note:
+    cmp byte cs:[speaker_drv_irq_state], SPEAKER_STOP
+    jz .no_note
+    mov si, cs:[speaker_drv_irq_sample_ptr]
+    mov ax, cs:[si]
+    cmp ax, 0xFFFF
+    jz .no_note
+    test ax, ax
+.no_note:
+    ret
+
 SPEAKER_STOP equ 0x00
 SPEAKER_PLAY equ 0x01
 
@@ -121,7 +121,7 @@ speaker_drv_irq_handler:
 	je .play
 .disable_and_return:
 	speaker_disable
-        jmp .end
+    jmp .end
 .play:
 	push ds
 	push si
@@ -138,13 +138,14 @@ speaker_drv_irq_handler:
 	test ax, ax
 	jnz .play_note
 	speaker_disable
-	pit_ch0_trig_after 0x3FFF
-	jmp .end
+    mov ax, 0x3FFF
+    jmp .pre_end
 .play_note:
 	push ax
 	speaker_square_wave
 	speaker_enable
 	pop ax
+.pre_end:
 	pit_ch0_trig_after
 .end:
 	mov al, PIC_EOI

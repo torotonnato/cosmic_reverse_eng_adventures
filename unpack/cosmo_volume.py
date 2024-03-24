@@ -12,12 +12,14 @@ class Entry:
         self.data  = data
 
     @staticmethod
-    def from_bytes(data):
-        return Entry(
-            data[:12].strip(b'\x00').lower().decode(),
-            struct.unpack('<i', data[12:16])[0],
-            struct.unpack('<i', data[16:20])[0],
-            data
+    def from_bytes(volume_data, idx):
+        metadata = volume_data[idx * Entry.record_size:(idx + 1) * Entry.record_size]
+        ofs, size = struct.unpack('<II', metadata[12:20])
+        return None if ofs + size >= len(volume_data) else Entry(
+            metadata[:12].strip(b'\x00').lower().decode(),
+            ofs,
+            size,
+            volume_data[ofs:ofs + size]
         )
 
     def print(self):
@@ -30,7 +32,7 @@ class Entry:
 
     def unpack(self, path):
         with open(f'{path}/{self.fname}', 'wb') as f:
-            f.write(self.data[self.ofs:self.ofs + self.size])
+            f.write(self.data)
 
 
 
@@ -45,11 +47,10 @@ class Volume:
     def open(fname):
         with open(fname, 'rb') as f:
             vol = Volume(fname, f.read())
-            for idx in range(0, len(vol.data), Entry.record_size):
-                entry = Entry.from_bytes(vol.data[idx:idx + Entry.record_size])
+            idx = 0
+            while entry := Entry.from_bytes(vol.data, idx):
                 vol.entries.append(entry)
-                if entry.ofs + entry.size >= len(vol.data):
-                    break
+                idx += 1
             return vol
 
     def print(self):

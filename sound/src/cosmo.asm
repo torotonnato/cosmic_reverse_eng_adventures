@@ -1,207 +1,90 @@
 org 100h
 
-	jmp main
+jmp main
 
-%include "speaker_drv.asm"
+%include "tui.asm"
+
+bins_no: equ 20
 
 main:
-	mov ah, 0x01
-	mov cx, 0x100
-	int 0x10
-
-	mov ax, 0x1003
-	mov bl, 0x00
-	int 0x10
-
-	call set_palette
-
-;	push 0xB800
-;	pop es
-;	sub di, di
-;	sub dx, dx
-;.c:
-;	mov ah, dl
-;	shl ah, 4
-;	mov al, ' '
-;	mov cx, 80
-;.r:
-;	stosw
-;	loop .r
-;	inc dx
-;	cmp dx, 25
-;	jnz .c
-;	ret
-
+	tui_init
 	call speaker_drv_init
+
 	mov si, sound2
 	call speaker_drv_play
 
-	fld1
-	fld dword [beta]
-	fsubp st1, st0
-	fld dword [beta]
-	push 0xB800
-	pop es
-frame:
-	call calc_bins
+    fild word [bins_max_height] ;(bins_max_height)
+    fld dword [bins_alpha] ;(alpha) (bins_max_height)
+    fld1 ;(1.0) (alpha) (bins_max_height)
+    fsub st0, st1 ;(1.0 - alpha) (alpha) (bins_max_height)
+.l:
+    call setup_widget
+    tui_widget (title_str + 9), (ibins)
+    in al, 0x60
+    cmp al, 1
+    jnz .l
 
-	sub di, di
-	sub dx, dx
-.cols:
-	sub cx, cx
-.rows:
-	mov ax, 0x0720
-	cmp cx, 70
-	jae .skip
-	cmp cx, 10
-	jb .skip
+	call speaker_drv_shutdown
+    tui_shutdown
 
-	mov bp, 24
-	sub bp, dx
-
-	push ax
-	mov ax, cx
-	sub ax, 10
-	mov bl, 3
-	div bl
-	mov bl, al
-	sub bh, bh
-	cmp ah, 2
-	pop ax
-	je .skip
-	shl bx, 1
-	cmp bp, [bx + ibins]
-	ja .skip
-	mov ax, bp
-	shl ax, 8
-	mov al, 0xDB
-.skip:
-	stosw
-	inc cx
-	cmp cx, 80
-	jb .rows
-
-	inc dx
-	cmp dx, 25
-	jb .cols
-
-	in al, 0x60
-	dec al
-	jnz frame
-
-;	cmp byte [speaker_drv_irq_state], SPEAKER_PLAY
-;	je frame
-
-	mov ah, 0
-	int 16h
-	call speaker_drv_close
-	mov ax, 0x03
-	int 0x10
 	ret
 
-calc_bins:
-	pusha
-	mov bx, [speaker_drv_irq_sample_ptr]
-	fld dword [pit_freq_khz]
-	fild word [bx]
-	fdivp
-	fld dword [half]
-	fsubp
-	fistp word [bin_idx]
-	mov di, [bin_idx]
-	shl di, 2
-	mov bp, ibins
-	mov si, bins
-	add di, si
-	mov cx, 20
-.bin_loop:
-	fld dword [si]
-	fmul st0, st1
-	cmp si, di
-	jne .other_bin
-	fadd st0, st2
-.other_bin:
-	fst dword [si]
-	fld dword [ten]
-	fmulp
-	fld dword [half]
-	fsubp
-	fistp word [bp]
-	add si, 4
-	add bp, 2
-	loop .bin_loop
-	popa
-	ret
+setup_widget:
+    mov ax, bins_no
+    call speaker_drv_get_current_note
+    jz .idx_done
+    push ax
+    mov bp, sp
+    fld dword [bins_mult] ;(bin_mult)
+    fld dword [bins_mult_log] ;(bin_mul_log) (bin_mult)
+    fld dword [pit_src_clock_hz] ;(pit_src_clock_hz) (bin_mult_log) (bin_mult)
+    fmulp ;(pit_src_clock_hz * bin_mult_log) (bin_mult)
+    fild word [bp] ;(lambda) (pit_src_clock_hz * bin_mult_log) (bin_mult)
+    fild word [bins_f_max] ;(f_max) (lambda) (pit_src_clock_hz * bin_mult_log) (bin_mult)
+    fmulp ;(f_max * lambda) (pit_src_clock_hz * bin_mult_log) (bin_mult)
+    fdivp ;(pit_src_clock_hz * bin_mult_log / f_max * lambda) (bin_mult)
+    fyl2xp1
+    fistp word [bp]
+    pop ax
+    cmp ax, bins_no
+    jb .idx_done
+    mov ax, bins_no - 1
+.idx_done:
+    sub ax, bins_no
+    inc ax
+    neg ax
+    mov si, bins
+    mov di, ibins
+    mov cx, bins_no
+.update:
+    fld dword [si] ;(bins[i]) (1.0 - alpha) (alpha) (bins_max_height)
+    fmul st1 ;(bins[i] * (1.0 - alpha)) (1.0 - alpha) (alpha) (bins_max_height)
+    cmp ax, cx
+    jne .not_selected
+    fadd st2 ;(alpha + bins[i] * (1.0 - alpha)) (1.0 - alpha) (alpha) (bins_max_height)
+.not_selected:
+    fst dword [si]
+    fmul st3
+    fistp word [di]
+    add si, 4
+    add di, 2
+    loop .update
+    ret
 
-set_palette:
-	mov cx, 16
-	mov si, palette
-.palette:
-	push cx
-	mov bl, [si]
-	sub bh, bh
-	mov dh, [si + 1]
-	mov ch, [si + 2]
-	mov cl, [si + 3]
-	mov ax, 0x1010
-	int 0x10
-	pop cx
-	add si, 4
-	loop .palette
-	ret
 
-sound1: dw 0x1A5E, 0x1A5E, 0x1A5E, 0, 0, 0x1f40, 0x1f40, 0x1f40, 0xffff
+pit_src_clock_hz: dd 1193181.6666
+
+bins_max_height: dw 16
+bins_alpha: dd 0.2
+bins: times bins_no dd 0.0
+bins_mult: dd 4.0
+bins_mult_log: dd 31.0
+bins_f_max: dw 10000
+
+ibins: times bins_no dw 0
+
 sound2: db 0x7E, 0x04, 0x7E, 0x04, 0x7E, 0x04, 0x7E, 0x04, 0x7E, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x10, 0x36, 0x10, 0x36, 0x10, 0x36, 0x10, 0x36, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x28, 0x0A, 0x28, 0x0A, 0x28, 0x0A, 0x28, 0x0A, 0x28, 0x0A, 0x28, 0x0A, 0x28, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3A, 0x07, 0x3A, 0x07, 0x3A, 0x07, 0x3A, 0x07, 0x3A, 0x07, 0x3A, 0x07, 0x3A, 0x07, 0x3A, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, 0x18, 0xA8, 0x16, 0x4A, 0x15, 0x82, 0x14, 0x24, 0x13, 0x8E, 0x12, 0xC6, 0x11, 0xCC, 0x10, 0xD2, 0x0F, 0x3C, 0x0F, 0x74, 0x0E, 0x7A, 0x0D, 0x86, 0x0B, 0x60, 0x09, 0x98, 0x08, 0x02, 0x08, 0x3A, 0x07, 0xA4, 0x06, 0xDC, 0x05, 0x46, 0x05, 0xB0, 0x04, 0x1A, 0x04, 0xFF, 0xFF
 
-pit_freq_khz: dd 23863.64 ;dd 11931.82
-half:         dd 0.5
-ten:          dd 16.0
-bin_idx:      dw 0
-bins:         times 20 dd 0.0
-ibins:        times 20 dw 0
-palette:
-	db 0x00, 0x00, 0x00, 0x00
-	db 0x01, 0x00, 0x1d, 0x00
-	db 0x02, 0x00, 0x20, 0x00
-	db 0x03, 0x00, 0x22, 0x00
-	db 0x04, 0x14, 0x24, 0x00
-	db 0x05, 0x22, 0x25, 0x00
-	db 0x14, 0x2f, 0x26, 0x00
-	db 0x07, 0x3b, 0x25, 0x00
-	db 0x38, 0x3f, 0x24, 0x00
-	db 0x39, 0x3f, 0x22, 0x0a
-	db 0x3a, 0x3f, 0x21, 0x18
-	db 0x3b, 0x3f, 0x20, 0x25
-	db 0x3c, 0x3f, 0x22, 0x32
-	db 0x3d, 0x3f, 0x26, 0x3f
-	db 0x3e, 0x3f, 0x28, 0x3f
-	db 0x3f, 0x3f, 0x3f, 0x3f
+title_str: db '  ciaone  '
 
-beta:         dd 0.8
-
-pit_freq:   dd 1193182.0
-multiplier: dd 17.847503731
-color:      dw 0
-
-;.colors:
-;	mov dx, 0x3C8
-;	sub ax, ax
-;	out dx, al
-;	inc dx
-;	mov ax, cs:[speaker_drv_irq_sample_ptr]
-;	test ax, ax
-;	jz .zero
-;	fld dword [multiplier]
-;	fild dword [pit_freq]
-;	fild word [speaker_drv_irq_sample_ptr]
-;	fdivp
-;	fyl2x
-;	fistp word [color]
-;	mov al, byte [color]
-;.zero:
-;	out dx, al
-;	out dx, al
-;	mov al, 0
-;	out dx, al
-;	cmp byte cs:[speaker_drv_irq_state], SPEAKER_PLAY
-;	je .colors
+%include "speaker_drv.asm"
