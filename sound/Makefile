@@ -7,7 +7,7 @@ SIZE=`ls build/cosmo.com -l | cut -d' ' -f5`
 
 all: $(BUILD_PATH)/cosmo.com
 
-$(BUILD_PATH)/cosmo.com: $(SOURCE_PATH)cosmo.asm $(SOURCE_PATH)speaker_drv.asm
+$(BUILD_PATH)/cosmo.com: $(SOURCE_PATH)cosmo.asm $(SOURCE_PATH)speaker_drv.asm $(SOURCE_PATH)tui.asm
 	@nasm $(SOURCE_PATH)cosmo.asm -o $(BUILD_PATH)cosmo.com -I$(SOURCE_PATH)
 	@echo ✅ assembled: \\e[4m$(SIZE) bytes\\e[0m
 
@@ -18,7 +18,7 @@ gen_pal:
 
 run: $(BUILD_PATH)cosmo.com
 	@cp $(BUILD_PATH)cosmo.com $(DOSBOX_HOME)
-	@dosbox $(BUILD_PATH)cosmo.com
+	@dosbox -c cosmo.com -c exit 1> /dev/null
 
 clean:
 	@rm -f $(BUILD_PATH)cosmo.com
